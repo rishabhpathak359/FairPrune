@@ -1,0 +1,8 @@
+val_csv: "data/CheXpert-v1.0-small/valid.csv"
+image_root: "data/CheXpert-v1.0-small/"
+target: "Cardiomegaly"
+sensitive_attr: "Sex"
+batch_size: 32
+pretrained_model: "models/pretrained_densenet.pth"
+prune_ratio: 0.1
+beta: 0.3
