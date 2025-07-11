@@ -1,4 +1,5 @@
 val_csv: "data/archive(1)/valid.csv"
+train_csv: data/archive(1)/train.csv
 image_root: "data/archive(1)/"
 target: "Cardiomegaly"
 sensitive_attr: "Sex"
@@ -6,3 +7,5 @@ batch_size: 32
 pretrained_model: "models/vit_b_chexpert.pth"
 prune_ratio: 0.1
 beta: 0.3
+epochs: 3
+lr: 1e-4

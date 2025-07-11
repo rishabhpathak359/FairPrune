@@ -6,6 +6,7 @@ from transformers import AutoModelForImageClassification, AutoImageProcessor
 from fairprune.prune_model import prune_model
 from utils.metrics import evaluate
 import torch.nn as nn
+import torch.optim as optim
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
@@ -17,6 +18,15 @@ model = AutoModelForImageClassification.from_pretrained("codewithdark/vit-chest-
 processor = AutoImageProcessor.from_pretrained("codewithdark/vit-chest-xray")
 
 # Dataset
+train_dataset = CheXpertDatasetHF(
+    csv_path=config['train_csv'],
+    image_root=config['image_root'],
+    processor=processor,
+    target_col=config['target'],
+    sensitive_col=config['sensitive_attr']
+)
+train_loader = DataLoader(train_dataset, batch_size=config['batch_size'], shuffle=True)
+
 val_dataset = CheXpertDatasetHF(
     csv_path=config['val_csv'],
     image_root=config['image_root'],
@@ -26,15 +36,39 @@ val_dataset = CheXpertDatasetHF(
 )
 val_loader = DataLoader(val_dataset, batch_size=config['batch_size'], shuffle=False)
 
-# Loss
 criterion = nn.CrossEntropyLoss()
 
-# Evaluate before pruning
-print("Before Pruning:")
+# ✅ Freeze all except classifier head
+for param in model.parameters():
+    param.requires_grad = False
+
+for param in model.classifier.parameters():
+    param.requires_grad = True
+
+optimizer = optim.Adam(filter(lambda p: p.requires_grad, model.parameters()), lr=config.get('lr', 1e-4))
+num_epochs = config.get('epochs', 3)
+
+print(f"\n🔧 Training classifier for {num_epochs} epochs...\n")
+model.train()
+for epoch in range(num_epochs):
+    total_loss = 0
+    for x, y, _ in train_loader:
+        x, y = x.to(device), y.to(device)
+        optimizer.zero_grad()
+        outputs = model(pixel_values=x)
+        loss = criterion(outputs.logits, y)
+        loss.backward()
+        optimizer.step()
+        total_loss += loss.item()
+    avg_loss = total_loss / len(train_loader)
+    print(f"Epoch {epoch+1}/{num_epochs}, Loss: {avg_loss:.4f}")
+
+print("\n📊 Before Pruning:")
+model.eval()
 metrics = evaluate(model, val_loader, criterion, device)
 print(metrics)
 
-# Run FairPrune
+print("\n🔧 Running FairPrune...")
 pruned_model = prune_model(
     model=model,
     val_loader=val_loader,
@@ -45,7 +79,6 @@ pruned_model = prune_model(
     b_param=config['beta']
 )
 
-# Evaluate after pruning
-print("After Pruning:")
+print("\n📊 After Pruning:")
 metrics = evaluate(pruned_model, val_loader, criterion, device)
 print(metrics)
