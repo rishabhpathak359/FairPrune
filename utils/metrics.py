@@ -66,3 +66,22 @@ def group_metrics(preds, labels, groups, probs):
         metrics['eopp'] = None
 
     return metrics
+
+
+
+
+def compute_group_accuracy(model, loader, device, target_group):
+    model.eval()
+    correct = {True: 0, False: 0}
+    total = {True: 0, False: 0}
+    with torch.no_grad():
+        for x, y, g in loader:
+            x, y = x.to(device), y.to(device)
+            outputs = model(pixel_values=x)
+            preds = outputs.logits.argmax(dim=-1)
+            for target in [True, False]:
+                mask = (g == target_group) if target else (g != target_group)
+                if mask.any():
+                    correct[target] += (preds[mask] == y[mask]).sum().item()
+                    total[target] += mask.sum().item()
+    return correct[True]/(total[True] or 1), correct[False]/(total[False] or 1)

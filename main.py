@@ -3,7 +3,7 @@ from torch.utils.data import DataLoader
 import yaml
 from utils.dataloader import CheXpertDatasetHF
 from transformers import AutoModelForImageClassification, AutoImageProcessor
-from fairprune.prune_model import prune_model
+from fairprune.prune_model import prune_model_iterative
 from utils.metrics import evaluate
 import torch.nn as nn
 import torch.optim as optim
@@ -35,17 +35,27 @@ val_dataset = CheXpertDatasetHF(
     sensitive_col=config['sensitive_attr']
 )
 val_loader = DataLoader(val_dataset, batch_size=config['batch_size'], shuffle=False)
+# Load test set
+test_dataset = CheXpertDatasetHF(
+    csv_path=config['test_csv'],
+    image_root=config['image_root'],
+    processor=processor,
+    target_col=config['target'],
+    sensitive_col=config['sensitive_attr']
+)
+test_loader = DataLoader(test_dataset, batch_size=config['batch_size'], shuffle=False)
 
 criterion = nn.CrossEntropyLoss()
 
-# ✅ Freeze all except classifier head
+✅ Freeze all except classifier head
 for param in model.parameters():
     param.requires_grad = False
 
 for param in model.classifier.parameters():
     param.requires_grad = True
 
-optimizer = optim.Adam(filter(lambda p: p.requires_grad, model.parameters()), lr=config.get('lr', 1e-4))
+optimizer = optim.Adam(filter(lambda p: p.requires_grad, model.parameters()), lr=float(config.get('lr', 1e-4))
+)
 num_epochs = config.get('epochs', 3)
 
 print(f"\n🔧 Training classifier for {num_epochs} epochs...\n")
@@ -69,16 +79,23 @@ metrics = evaluate(model, val_loader, criterion, device)
 print(metrics)
 
 print("\n🔧 Running FairPrune...")
-pruned_model = prune_model(
+pruned_model = prune_model_iterative(
     model=model,
     val_loader=val_loader,
     worse_performing_group=1,
     criterion=criterion,
     device=device,
     p_ratio=config['prune_ratio'],
-    b_param=config['beta']
+    lambda_align=0.1,
+    num_iterations=5
 )
 
 print("\n📊 After Pruning:")
 metrics = evaluate(pruned_model, val_loader, criterion, device)
 print(metrics)
+
+
+print("\n📊 Final Test Evaluation:")
+metrics = evaluate(pruned_model, test_loader, criterion, device)
+print(metrics)
+

@@ -1,5 +1,6 @@
 val_csv: "data/archive(1)/valid.csv"
 train_csv: data/archive(1)/train.csv
+test_csv: data/archive(1)/test.csv
 image_root: "data/archive(1)/"
 target: "Cardiomegaly"
 sensitive_attr: "Sex"
