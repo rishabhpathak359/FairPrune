@@ -79,6 +79,9 @@ metrics = evaluate(model, val_loader, criterion, device)
 print(metrics)
 
 print("\n🔧 Running FairPrune...")
+for param in model.parameters():
+    param.requires_grad = True
+
 pruned_model = prune_model_iterative(
     model=model,
     val_loader=val_loader,
